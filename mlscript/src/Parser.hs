@@ -6,6 +6,8 @@ import Text.Parsec.String (Parser)
 import qualified Text.Parsec.Expr as Ex
 import qualified Text.Parsec.Token as Tok
 
+import Debug.Trace
+
 import Lexer
 import Syntax
 
@@ -36,16 +38,16 @@ variable = do
 
 definition :: Parser Expr
 definition = do
-  reserved "def"
+  reserved "let"
   name <- identifier
-  body <- expr
   reservedOp "="
+  body <- expr
   return $ Definition name body
 
 function :: Parser Expr
 function = do
   reserved "fun"
-  args <- parens $ many variable
+  args <- many variable
   reservedOp "->"
   body <- expr
   return $ Function args body
@@ -59,7 +61,7 @@ extern = do
 
 call :: Parser Expr
 call = do
-  name <- expr
+  name <- try variable <|> parens expr
   args <- parens $ commaSep expr
   return $ Call name args
 
@@ -95,8 +97,9 @@ constructor = do
 defn :: Parser Expr
 defn = try extern
     <|> try datatype
-    <|> try function
-    <|> expr
+    <|> try definition
+    <|> try expr
+    <|> factor
 
 contents :: Parser a -> Parser a
 contents p = do
@@ -106,10 +109,7 @@ contents p = do
   return r
 
 toplevel :: Parser [Expr]
-toplevel = many $ do
-    def <- defn
-    reservedOp ";"
-    return def
+toplevel = many defn
 
 parseExpr :: String -> Either ParseError Expr
 parseExpr = parse (contents expr) "<stdin>"
