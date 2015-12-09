@@ -41,7 +41,7 @@ definition = do
   reserved "let"
   name <- identifier
   reservedOp "="
-  body <- expr
+  body <- factor
   return $ Definition name body
 
 function :: Parser Expr
@@ -49,7 +49,7 @@ function = do
   reserved "fun"
   args <- many variable
   reservedOp "->"
-  body <- expr
+  body <- factor
   return $ Function args body
 
 extern :: Parser Expr
@@ -61,15 +61,37 @@ extern = do
 
 call :: Parser Expr
 call = do
-  name <- try variable <|> parens expr
-  args <- parens $ commaSep expr
+  name <- try variable <|> parens factor
+  args <- try ( parens  arguments) <|> arguments
   return $ Call name args
+  where
+  arguments = factor `sepBy1` reservedOp ","
+
+switch :: Parser Expr
+switch = do
+  reserved "case"
+  value_expr <- expr
+  reservedOp ":"
+  datatype_name <- identifier
+  reserved "of"
+  optional $ reservedOp "|"
+  switch_exprs <- switchExpr `sepBy1` reservedOp "|"
+  return $ Switch value_expr datatype_name switch_exprs
+
+switchExpr :: Parser SwitchExpr
+switchExpr = do
+  name <- identifier
+  vars <- many identifier
+  reservedOp "->"
+  body <- factor
+  return $ SwitchE name vars body
 
 factor :: Parser Expr
 factor = try floating
       <|> try int
       <|> try extern
       <|> try function
+      <|> try switch
       <|> try call
       <|> variable
       <|> parens expr
@@ -98,7 +120,6 @@ defn :: Parser Expr
 defn = try extern
     <|> try datatype
     <|> try definition
-    <|> try expr
     <|> factor
 
 contents :: Parser a -> Parser a
