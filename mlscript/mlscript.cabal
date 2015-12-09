@@ -1,0 +1,49 @@
+name:                mlscript
+version:             0.1.0.0
+synopsis:            Initial project template from stack
+description:         Please see README.md
+homepage:            http://github.com/scoiatael/mlscript#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Lukasz Czaplinski
+maintainer:          eternal.kadir@gmail.com
+copyright:           MIT
+category:            languages
+build-type:          Simple
+-- extra-source-files:
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Lib
+  build-depends:
+                base >= 4.7 && < 5
+              , haskeline            >= 0.7.1.2
+              , llvm-general         == 3.5.0.*
+              , llvm-general-pure    == 3.5.0.*
+              , mtl                  >= 2.2
+              , parsec               >= 3.1
+              , transformers
+              , containers           >= 0.4
+  default-language:    Haskell2010
+
+executable mlscript-exe
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , mlscript
+  default-language:    Haskell2010
+
+test-suite mlscript-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , mlscript
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/scoiatael/mlscript
