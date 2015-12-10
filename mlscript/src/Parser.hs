@@ -6,8 +6,6 @@ import Text.Parsec.String (Parser)
 import qualified Text.Parsec.Expr as Ex
 import qualified Text.Parsec.Token as Tok
 
-import Debug.Trace
-
 import Lexer
 import Syntax
 
@@ -130,7 +128,7 @@ contents p = do
   return r
 
 toplevel :: Parser [Expr]
-toplevel = many defn
+toplevel = defn `sepBy1` optional (reservedOp ";")
 
 parseExpr :: String -> Either ParseError Expr
 parseExpr = parse (contents expr) "<stdin>"
