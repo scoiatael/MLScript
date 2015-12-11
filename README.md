@@ -24,5 +24,5 @@ To build, run inside VM:
 ```
 $ cd /opt/mlscript
 $ stack setup
-$ stack exec ghc -- -isrc --make app/Main.hs
+$ stack build
 ```
