@@ -4,56 +4,104 @@ import Syntax
 
 import qualified Data.Map as Map
 
-type Function = [ValueType] -> ValueType
+import qualified Control.Monad.Trans.State as State
+
+import Control.Monad.Trans.Except as Except
+
+import Control.Monad.Identity (Identity, runIdentity)
+
+import Control.Monad.Trans (lift)
+
+type Function = [ValueType] -> Interpreter ()
 data ValueType = Value Double | Fun Function | Blank
-data State = State (Map.Map Name ValueType)
+type State = Map.Map Name ValueType
 
-blankState :: State
-blankState = State Map.empty
+type InterpreterError = String
 
-updateState :: State -> Name -> ValueType -> State
-updateState (State s) n a = State $ Map.insert n a s
+type Interpreter = State.StateT ValueType (State.StateT State (Except.ExceptT InterpreterError Identity))
 
-lookupState :: State -> Name -> Maybe ValueType
-lookupState (State s) n = Map.lookup n s
+runInterpreter :: Interpreter a -> Either InterpreterError a
+runInterpreter i = runIdentity $ Except.runExceptT $ flip State.evalStateT Map.empty $ State.evalStateT i Blank
 
-applyOp :: Op -> ValueType -> ValueType -> Double
+lift2 :: Except.ExceptT InterpreterError Identity a -> Interpreter a
+lift2 = lift . lift
+
+temporaryState :: State -> Interpreter a -> Interpreter a
+temporaryState s cal = do
+                       old_state <- varState
+                       lift $ State.put s
+                       v <- cal
+                       lift $ State.put old_state
+                       return v
+
+acc :: Interpreter ValueType
+acc = State.get
+
+updateAcc :: ValueType -> Interpreter ()
+updateAcc = State.put
+
+varState :: Interpreter State
+varState = lift State.get
+
+throw :: InterpreterError -> Interpreter a
+throw err = lift2 $ throwE err
+
+lookupVar :: Name -> Interpreter ValueType
+lookupVar n = do
+                vars <- varState
+                case Map.lookup n vars of
+                    Just e -> return e
+                    _ -> throw "Undefined variable"
+
+updateVar :: Name -> ValueType -> Interpreter ()
+updateVar n v = lift $ State.modify (Map.insert n v)
+
+applyOp :: Op -> ValueType -> ValueType -> Interpreter ValueType
 applyOp o e1 e2 = case (e1, e2) of
-                     (Value f1, Value f2) -> case o of
-                                                            Plus -> f1 + f2
-                                                            Minus -> f1 - f2
-                                                            Times -> f1 * f2
-                                                            Divide -> f1 / f2
-                     _ -> error "Bad arguments to applyOp"
+                     (Value f1, Value f2) -> return $ Value $
+                      case o of
+                        Plus -> f1 + f2
+                        Minus -> f1 - f2
+                        Times -> f1 * f2
+                        Divide -> f1 / f2
+                     _ -> throw "Bad arguments to binary operator"
 
-substitute :: State -> (Expr, ValueType) -> State
-substitute state (arg, actual_arg) = case arg of
-                                       Var v -> updateState state v actual_arg
-                                       _ -> error "Non-variable value in function body"
+substitute :: (Expr, ValueType) -> Interpreter ()
+substitute (arg, actual_arg) = case arg of
+                                    Var v -> updateVar v actual_arg
+                                    _ -> throw "Non-variable value in function body"
 
-createFun :: State -> [Expr] -> Expr -> Function
-createFun state args body actual_args = runEvaluation (foldl substitute state $ zip args actual_args) Blank [body]
+createFun :: [Expr] -> Expr -> Interpreter ValueType
+createFun args body = do
+  state <- varState
+  return $ Fun $ \actual_args -> temporaryState state $
+                                    do
+                                        mapM_  substitute $ zip args actual_args
+                                        runEvaluation body
 
-runEvaluation :: State -> ValueType -> [Expr] -> ValueType
-runEvaluation _ acc [] = acc
-runEvaluation state _ (e:es) = case e  of
-                                Float x -> runEvaluation state (Value x) es
-                                BinOp o e1 e2 -> runEvaluation state (Value $ applyOp o (runEvaluation state Blank [e1]) (runEvaluation state Blank [e2])) es
-                                Var n -> case lookupState state n of
-                                          Just value -> runEvaluation state value es
-                                          _ -> error "Undefined variable"
-                                Call fun args -> case runEvaluation state Blank [fun] of
-                                                    Fun f -> runEvaluation state (f (map (\a -> runEvaluation state Blank [a]) args)) es
-                                                    _ -> error "Application of value to value"
-                                Definition n expr -> runEvaluation (updateState state n (runEvaluation state Blank [expr])) Blank es
-                                Function args body -> let fun = Fun $ createFun state args body in runEvaluation state fun es
-                                _ -> error "NYI"
-                                -- DataType Name [Constructor]
-                                -- Switch Expr Name [SwitchExpr]
-                                -- Extern Name [Expr]
+runEvaluation :: Expr -> Interpreter ()
+runEvaluation e = case e of
+                    Float x -> updateAcc $ Value x
+                    BinOp o e1 e2 -> do
+                                        v1 <- runEvaluation e1 >> acc
+                                        v2 <- runEvaluation e2 >> acc
+                                        applyOp o v1 v2 >>= updateAcc
+                    Var n -> lookupVar n >>= updateAcc
+                    Call fun args -> runEvaluation fun >> acc >>= \acc_value ->
+                      case acc_value of
+                        Fun f -> mapM (\a -> runEvaluation a >> acc) args >>= f
+                        _ -> throw "Application of value to value"
+                    Definition n expr -> runEvaluation expr >> acc >>= updateVar n
+                    Function args body -> createFun args body >>= updateAcc
+                    _ -> throw "NotYetImplmented"
+                    -- DataType Name [Constructor]
+                    -- Switch Expr Name [SwitchExpr]
+                    -- Extern Name [Expr]
 
 eval :: [Expr] -> IO ()
-eval es = case runEvaluation blankState Blank es of
-          Value v -> print $ "Value: " ++ show v
-          Fun _ -> print "<function>"
-          Blank -> print "<blank>"
+eval es = print $  case runInterpreter ( mapM_ runEvaluation es >> acc) of
+                    Right value -> case value of
+                                         Value v -> show v
+                                         Fun _ -> "<function>"
+                                         Blank -> "<blank>"
+                    Left err -> "<error: " ++ show err ++ ">"
