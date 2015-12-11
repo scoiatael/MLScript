@@ -3,20 +3,16 @@ module Interpreter where
 import Syntax
 
 import qualified Data.Map as Map
-
 import qualified Control.Monad.Trans.State as State
-
-import Control.Monad.Trans.Except as Except
-
+import qualified Control.Monad.Trans.Except as Except
 import Control.Monad.Identity (Identity, runIdentity)
-
 import Control.Monad.Trans (lift)
 
-type Function = [ValueType] -> Interpreter ()
+type Function = [Value] -> Interpreter ()
 
-data ValueType = Value Double | Fun Function | Blank | Con Name [ValueType]
+data Value = Value Double | Fun Function | Blank | Con Name [Value]
 
-instance Show ValueType where
+instance Show Value where
   show value = case value of
                     Value v -> show v
                     Con n v -> n ++ " " ++ show v
@@ -25,16 +21,16 @@ instance Show ValueType where
 
 type DatatypeState = Map.Map Name [Constructor]
 
-type VarState = Map.Map Name ValueType
+type VarState = Map.Map Name Value
 
 type InterpreterError = String
 
-type Interpreter = State.StateT ValueType (State.StateT DatatypeState (State.StateT VarState (Except.ExceptT InterpreterError Identity)))
+type Interpreter = State.StateT Value (State.StateT DatatypeState (State.StateT VarState (Except.ExceptT InterpreterError Identity)))
 
 runInterpreter :: Interpreter a -> Either InterpreterError a
 runInterpreter i = runIdentity $ Except.runExceptT $ flip State.evalStateT Map.empty $ flip State.evalStateT Map.empty $ State.evalStateT i Blank
 
-lift2 ::  State.StateT VarState (ExceptT InterpreterError Identity) a -> Interpreter a
+lift2 ::  State.StateT VarState (Except.ExceptT InterpreterError Identity) a -> Interpreter a
 lift2 = lift . lift
 
 lift3 :: Except.ExceptT InterpreterError Identity a -> Interpreter a
@@ -48,19 +44,19 @@ temporaryState s cal = do
                        lift2 $ State.put old_state
                        return v
 
-acc :: Interpreter ValueType
+acc :: Interpreter Value
 acc = State.get
 
-updateAcc :: ValueType -> Interpreter ()
+updateAcc :: Value -> Interpreter ()
 updateAcc = State.put
 
 varState :: Interpreter VarState
 varState = lift2 State.get
 
 throw :: InterpreterError -> Interpreter a
-throw err = lift3 $ throwE err
+throw err = lift3 $ Except.throwE err
 
-lookupVar :: Name -> Interpreter ValueType
+lookupVar :: Name -> Interpreter Value
 lookupVar n = do
                 vars <- varState
                 case Map.lookup n vars of
@@ -77,10 +73,10 @@ lookupCons n = do
                         Just e -> return e
                         _ -> throw "Undefined datatype"
 
-updateVar :: Name -> ValueType -> Interpreter ()
+updateVar :: Name -> Value -> Interpreter ()
 updateVar n v = lift2 $ State.modify (Map.insert n v)
 
-applyOp :: Op -> ValueType -> ValueType -> Interpreter ValueType
+applyOp :: Op -> Value -> Value -> Interpreter Value
 applyOp o e1 e2 = case (e1, e2) of
                      (Value f1, Value f2) -> return $ Value $
                       case o of
@@ -90,7 +86,7 @@ applyOp o e1 e2 = case (e1, e2) of
                         Divide -> f1 / f2
                      _ -> throw "Bad arguments to binary operator"
 
-substitute :: (Expr, ValueType) -> Interpreter ()
+substitute :: (Expr, Value) -> Interpreter ()
 substitute (arg, actual_arg) = case arg of
                                     Var v -> updateVar v actual_arg
                                     _ -> throw "Non-variable value in function body"
@@ -125,6 +121,20 @@ registerConstructor (Constructor name arity) = updateVar name constructor
                                                             then throw "Not enough arguments to constructor"
                                                             else throw "Too many arguments to constructor"
 
+handleSwitch :: Expr -> [SwitchExpr] -> Interpreter ()
+handleSwitch expr cases =  do
+                        v <- runEvaluation expr >> acc
+                        case v of
+                             Con constructor_name values ->
+                                 let cases_map = foldl Map.union Map.empty $ map (\(SwitchExpr con vars body) -> Map.singleton con (vars,body)) cases in
+                                     case Map.lookup constructor_name cases_map of
+                                         Just (vars, body) -> do
+                                             fun <- createFun (map Var vars) body
+                                             fun values
+                                         _ -> throw "Constructor pattern not found"
+                             _ -> throw "Case with non-constructor value"
+
+
 runEvaluation :: Expr -> Interpreter ()
 runEvaluation e = case e of
                     Float x -> updateAcc $ Value x
@@ -140,17 +150,7 @@ runEvaluation e = case e of
                     Definition n expr -> runEvaluation expr >> acc >>= updateVar n
                     Function args body -> createFun args body >>= \f ->  updateAcc $ Fun f
                     Datatype (name, cons) -> registerDatatype name cons >> mapM_ registerConstructor cons
-                    Switch expr _ cases -> do
-                        v <- runEvaluation expr >> acc
-                        case v of
-                             Con constructor_name values ->
-                                 let cases_map = foldl Map.union Map.empty $ map (\(SwitchExpr con vars body) -> Map.singleton con (vars,body)) cases in
-                                     case Map.lookup constructor_name cases_map of
-                                         Just (vars, body) -> do
-                                             fun <- createFun (map Var vars) body
-                                             fun values
-                                         _ -> throw "Constructor pattern not found"
-                             _ -> throw "Case with non-constructor value"
+                    Switch expr _ cases -> handleSwitch expr cases
                     _ -> throw "NotYetImplmented"
                     -- Extern Name [Expr]
 
