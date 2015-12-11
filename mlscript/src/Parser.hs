@@ -82,7 +82,7 @@ switchExpr = do
   vars <- many identifier
   reservedOp "->"
   body <- factor
-  return $ SwitchE name vars body
+  return $ SwitchExpr name vars body
 
 factor :: Parser Expr
 factor = try floating
@@ -100,7 +100,7 @@ datatype = do
    name <- identifier
    reservedOp "="
    cons <- constructor `sepBy1` reservedOp "|"
-   return $ DataType name cons
+   return $ Datatype (name, cons)
 
 constructor :: Parser Constructor
 constructor = do
@@ -109,7 +109,7 @@ constructor = do
     let arity = case cons of
                           Nothing -> 0
                           Just a -> length a
-    return $ Con name arity
+    return $ Constructor name arity
     where
     constructor_arity = try (dot >> return [()]) <|> parens (many1 dot)
     dot = reservedOp "."

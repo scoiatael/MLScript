@@ -13,12 +13,23 @@ import Control.Monad.Identity (Identity, runIdentity)
 import Control.Monad.Trans (lift)
 
 type Function = [ValueType] -> Interpreter ()
-data ValueType = Value Double | Fun Function | Blank
-type State = Map.Map Name ValueType
+
+data ValueType = Value Double | Fun Function | Blank | Con Name [ValueType]
+
+instance Show ValueType where
+  show value = case value of
+                    Value v -> show v
+                    Con n v -> n ++ " " ++ show v
+                    Fun _ -> "<function>"
+                    Blank -> "<void>"
+
+type DatatypeState = Map.Map Name Expr
+
+type VarState = Map.Map Name ValueType
 
 type InterpreterError = String
 
-type Interpreter = State.StateT ValueType (State.StateT State (Except.ExceptT InterpreterError Identity))
+type Interpreter = State.StateT ValueType (State.StateT VarState (Except.ExceptT InterpreterError Identity))
 
 runInterpreter :: Interpreter a -> Either InterpreterError a
 runInterpreter i = runIdentity $ Except.runExceptT $ flip State.evalStateT Map.empty $ State.evalStateT i Blank
@@ -26,7 +37,7 @@ runInterpreter i = runIdentity $ Except.runExceptT $ flip State.evalStateT Map.e
 lift2 :: Except.ExceptT InterpreterError Identity a -> Interpreter a
 lift2 = lift . lift
 
-temporaryState :: State -> Interpreter a -> Interpreter a
+temporaryState :: VarState -> Interpreter a -> Interpreter a
 temporaryState s cal = do
                        old_state <- varState
                        lift $ State.put s
@@ -40,7 +51,7 @@ acc = State.get
 updateAcc :: ValueType -> Interpreter ()
 updateAcc = State.put
 
-varState :: Interpreter State
+varState :: Interpreter VarState
 varState = lift State.get
 
 throw :: InterpreterError -> Interpreter a
@@ -100,8 +111,5 @@ runEvaluation e = case e of
 
 eval :: [Expr] -> IO ()
 eval es = print $  case runInterpreter ( mapM_ runEvaluation es >> acc) of
-                    Right value -> case value of
-                                         Value v -> show v
-                                         Fun _ -> "<function>"
-                                         Blank -> "<blank>"
+                    Right value -> show value
                     Left err -> "<error: " ++ show err ++ ">"
