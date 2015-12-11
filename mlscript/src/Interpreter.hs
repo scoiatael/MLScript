@@ -23,26 +23,29 @@ instance Show ValueType where
                     Fun _ -> "<function>"
                     Blank -> "<void>"
 
-type DatatypeState = Map.Map Name Expr
+type DatatypeState = Map.Map Name [Constructor]
 
 type VarState = Map.Map Name ValueType
 
 type InterpreterError = String
 
-type Interpreter = State.StateT ValueType (State.StateT VarState (Except.ExceptT InterpreterError Identity))
+type Interpreter = State.StateT ValueType (State.StateT DatatypeState (State.StateT VarState (Except.ExceptT InterpreterError Identity)))
 
 runInterpreter :: Interpreter a -> Either InterpreterError a
-runInterpreter i = runIdentity $ Except.runExceptT $ flip State.evalStateT Map.empty $ State.evalStateT i Blank
+runInterpreter i = runIdentity $ Except.runExceptT $ flip State.evalStateT Map.empty $ flip State.evalStateT Map.empty $ State.evalStateT i Blank
 
-lift2 :: Except.ExceptT InterpreterError Identity a -> Interpreter a
+lift2 ::  State.StateT VarState (ExceptT InterpreterError Identity) a -> Interpreter a
 lift2 = lift . lift
+
+lift3 :: Except.ExceptT InterpreterError Identity a -> Interpreter a
+lift3 = lift2 . lift
 
 temporaryState :: VarState -> Interpreter a -> Interpreter a
 temporaryState s cal = do
                        old_state <- varState
-                       lift $ State.put s
+                       lift2 $ State.put s
                        v <- cal
-                       lift $ State.put old_state
+                       lift2 $ State.put old_state
                        return v
 
 acc :: Interpreter ValueType
@@ -52,10 +55,10 @@ updateAcc :: ValueType -> Interpreter ()
 updateAcc = State.put
 
 varState :: Interpreter VarState
-varState = lift State.get
+varState = lift2 State.get
 
 throw :: InterpreterError -> Interpreter a
-throw err = lift2 $ throwE err
+throw err = lift3 $ throwE err
 
 lookupVar :: Name -> Interpreter ValueType
 lookupVar n = do
@@ -65,7 +68,7 @@ lookupVar n = do
                     _ -> throw "Undefined variable"
 
 updateVar :: Name -> ValueType -> Interpreter ()
-updateVar n v = lift $ State.modify (Map.insert n v)
+updateVar n v = lift2 $ State.modify (Map.insert n v)
 
 applyOp :: Op -> ValueType -> ValueType -> Interpreter ValueType
 applyOp o e1 e2 = case (e1, e2) of
@@ -90,6 +93,25 @@ createFun args body = do
                                         mapM_  substitute $ zip args actual_args
                                         runEvaluation body
 
+registerDatatype :: Name -> [Constructor] -> Interpreter ()
+registerDatatype n cs = do
+                        datatypes <- lift State.get
+                        if Map.member n datatypes
+                        then throw "Datatype already defined"
+                        else lift $ State.modify (Map.insert n cs)
+
+registerConstructor :: Constructor -> Interpreter ()
+registerConstructor (Constructor name arity) = updateVar name $ Fun build_constructor_function
+                                               where
+                                               build_constructor_function actual_args =
+                                                    let actual_arity = length actual_args in
+                                                        if actual_arity == arity
+                                                        then updateAcc $ Con name actual_args
+                                                        else
+                                                            if actual_arity < arity
+                                                            then throw "Not enough arguments to constructor"
+                                                            else throw "Too many arguments to constructor"
+
 runEvaluation :: Expr -> Interpreter ()
 runEvaluation e = case e of
                     Float x -> updateAcc $ Value x
@@ -104,6 +126,7 @@ runEvaluation e = case e of
                         _ -> throw "Application of value to value"
                     Definition n expr -> runEvaluation expr >> acc >>= updateVar n
                     Function args body -> createFun args body >>= updateAcc
+                    Datatype (name, cons) -> registerDatatype name cons >> mapM_ registerConstructor cons
                     _ -> throw "NotYetImplmented"
                     -- DataType Name [Constructor]
                     -- Switch Expr Name [SwitchExpr]
