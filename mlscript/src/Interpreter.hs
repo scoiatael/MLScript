@@ -67,6 +67,16 @@ lookupVar n = do
                     Just e -> return e
                     _ -> throw "Undefined variable"
 
+datatypeState :: Interpreter DatatypeState
+datatypeState = lift State.get
+
+lookupCons :: Name -> Interpreter [Constructor]
+lookupCons n = do
+                    vars <- datatypeState
+                    case Map.lookup n vars of
+                        Just e -> return e
+                        _ -> throw "Undefined datatype"
+
 updateVar :: Name -> ValueType -> Interpreter ()
 updateVar n v = lift2 $ State.modify (Map.insert n v)
 
@@ -85,10 +95,10 @@ substitute (arg, actual_arg) = case arg of
                                     Var v -> updateVar v actual_arg
                                     _ -> throw "Non-variable value in function body"
 
-createFun :: [Expr] -> Expr -> Interpreter ValueType
+createFun :: [Expr] -> Expr -> Interpreter Function
 createFun args body = do
   state <- varState
-  return $ Fun $ \actual_args -> temporaryState state $
+  return $ \actual_args -> temporaryState state $
                                     do
                                         mapM_  substitute $ zip args actual_args
                                         runEvaluation body
@@ -101,8 +111,11 @@ registerDatatype n cs = do
                         else lift $ State.modify (Map.insert n cs)
 
 registerConstructor :: Constructor -> Interpreter ()
-registerConstructor (Constructor name arity) = updateVar name $ Fun build_constructor_function
+registerConstructor (Constructor name arity) = updateVar name constructor
                                                where
+                                               constructor = if arity == 0
+                                                             then Con name []
+                                                             else Fun build_constructor_function
                                                build_constructor_function actual_args =
                                                     let actual_arity = length actual_args in
                                                         if actual_arity == arity
@@ -125,11 +138,20 @@ runEvaluation e = case e of
                         Fun f -> mapM (\a -> runEvaluation a >> acc) args >>= f
                         _ -> throw "Application of value to value"
                     Definition n expr -> runEvaluation expr >> acc >>= updateVar n
-                    Function args body -> createFun args body >>= updateAcc
+                    Function args body -> createFun args body >>= \f ->  updateAcc $ Fun f
                     Datatype (name, cons) -> registerDatatype name cons >> mapM_ registerConstructor cons
+                    Switch expr _ cases -> do
+                        v <- runEvaluation expr >> acc
+                        case v of
+                             Con constructor_name values ->
+                                 let cases_map = foldl Map.union Map.empty $ map (\(SwitchExpr con vars body) -> Map.singleton con (vars,body)) cases in
+                                     case Map.lookup constructor_name cases_map of
+                                         Just (vars, body) -> do
+                                             fun <- createFun (map Var vars) body
+                                             fun values
+                                         _ -> throw "Constructor pattern not found"
+                             _ -> throw "Case with non-constructor value"
                     _ -> throw "NotYetImplmented"
-                    -- DataType Name [Constructor]
-                    -- Switch Expr Name [SwitchExpr]
                     -- Extern Name [Expr]
 
 eval :: [Expr] -> IO ()
