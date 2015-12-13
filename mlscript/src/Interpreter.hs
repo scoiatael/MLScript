@@ -127,12 +127,17 @@ handleSwitch expr cases =  do
                         case v of
                              Con constructor_name values ->
                                  let cases_map = foldl Map.union Map.empty $ map (\(SwitchExpr con vars body) -> Map.singleton con (vars,body)) cases in
-                                     case Map.lookup constructor_name cases_map of
+                                     case lookups [constructor_name, "_", "otherwise"] cases_map of
                                          Just (vars, body) -> do
                                              fun <- createFun (map Var vars) body
                                              fun values
-                                         _ -> throw "Constructor pattern not found"
+                                         _ ->  throw "Constructor pattern not found"
                              _ -> throw "Case with non-constructor value"
+                        where
+                          pick_first :: [Maybe a] -> Maybe a
+                          pick_first = foldl (\o1 o2 -> case o1 of Just _ -> o1; _ -> o2) Nothing
+                          lookups :: [Name] -> Map.Map Name a -> Maybe a
+                          lookups cons cons_map =  pick_first $ map (`Map.lookup` cons_map) cons
 
 
 runEvaluation :: Expr -> Interpreter ()
