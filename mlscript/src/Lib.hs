@@ -1,5 +1,8 @@
 module Lib
-    ( module Parser
+    ( module Parser,
+      module Interpreter
     ) where
 
-import Parser
+import Parser (parseToplevel, parseExpr)
+
+import Interpreter (eval)

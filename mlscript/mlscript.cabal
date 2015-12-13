@@ -27,9 +27,25 @@ library
               , containers           >= 0.4
   default-language:    Haskell2010
 
-executable mlscript-exe
+executable mlscript-parser
   hs-source-dirs:      app, src
-  main-is:             Main.hs
+  main-is:             ParserRepl.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+                base >= 4.7 && < 5
+              , haskeline            >= 0.7.1.2
+              , llvm-general         == 3.5.0.*
+              , llvm-general-pure    == 3.5.0.*
+              , mtl                  >= 2.2
+              , parsec               >= 3.1
+              , transformers
+              , containers           >= 0.4
+              , mlscript
+  default-language:    Haskell2010
+
+executable mlscript-interp
+  hs-source-dirs:      app, src
+  main-is:             InterpreterRepl.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
                 base >= 4.7 && < 5

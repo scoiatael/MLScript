@@ -9,17 +9,19 @@ data Expr
     | Call Expr [Expr]
     | Definition Name Expr
     | Function [Expr] Expr
-    | DataType Name [Constructor]
+    | Datatype Datatype
     | Switch Expr Name [SwitchExpr]
     | Extern Name [Expr]
    deriving (Eq, Ord, Show)
 
+type Datatype = (Name, [Constructor])
+
 data Constructor
-    = Con Name Int
+    = Constructor Name Int
       deriving (Eq, Ord, Show)
 
 data SwitchExpr
-     = SwitchE Name [Name] Expr
+     = SwitchExpr Name [Name] Expr
        deriving (Eq, Ord, Show)
 
 data Op
