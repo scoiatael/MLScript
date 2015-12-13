@@ -16,6 +16,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Lib
+  other-modules: Raw.Interpreter,Raw.Parser,Raw.Syntax,Raw.Lexer
   build-depends:
                 base >= 4.7 && < 5
               , haskeline            >= 0.7.1.2
@@ -30,6 +31,7 @@ library
 executable mlscript-parser
   hs-source-dirs:      app, src
   main-is:             ParserRepl.hs
+  other-modules: Lib,Raw.Interpreter,Raw.Parser,Raw.Syntax,Raw.Lexer
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
                 base >= 4.7 && < 5
@@ -46,6 +48,7 @@ executable mlscript-parser
 executable mlscript-interp
   hs-source-dirs:      app, src
   main-is:             InterpreterRepl.hs
+  other-modules: Lib,Raw.Interpreter,Raw.Parser,Raw.Syntax,Raw.Lexer
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
                 base >= 4.7 && < 5

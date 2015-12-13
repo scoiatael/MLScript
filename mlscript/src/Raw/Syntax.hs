@@ -1,4 +1,4 @@
-module Syntax where
+module Raw.Syntax where
 
 type Name = String
 

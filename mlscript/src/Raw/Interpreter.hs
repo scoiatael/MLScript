@@ -1,6 +1,6 @@
-module Interpreter where
+module Raw.Interpreter where
 
-import Syntax
+import Raw.Syntax
 
 import qualified Data.Map as Map
 import qualified Control.Monad.Trans.State as State

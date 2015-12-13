@@ -1,8 +1,8 @@
 module Lib
-    ( module Parser,
-      module Interpreter
+    ( module Raw.Parser,
+      module Raw.Interpreter
     ) where
 
-import Parser (parseToplevel, parseExpr)
+import Raw.Parser (parseToplevel, parseExpr)
 
-import Interpreter (eval)
+import Raw.Interpreter (eval)

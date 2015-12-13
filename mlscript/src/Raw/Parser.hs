@@ -1,4 +1,4 @@
-module Parser where
+module Raw.Parser where
 
 import Text.Parsec
 import Text.Parsec.String (Parser)
@@ -6,8 +6,8 @@ import Text.Parsec.String (Parser)
 import qualified Text.Parsec.Expr as Ex
 import qualified Text.Parsec.Token as Tok
 
-import Lexer
-import Syntax
+import Raw.Lexer
+import Raw.Syntax
 
 
 int :: Parser Expr

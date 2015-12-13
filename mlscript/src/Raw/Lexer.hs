@@ -1,4 +1,4 @@
-module Lexer
+module Raw.Lexer
  where
 
 import Text.Parsec.String (Parser)
