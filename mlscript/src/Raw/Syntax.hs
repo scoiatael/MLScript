@@ -1,6 +1,6 @@
 module Raw.Syntax where
 
-type Name = String
+import Util (Op, Name)
 
 data Expr
     = Float Double
@@ -23,10 +23,3 @@ data Constructor
 data SwitchExpr
      = SwitchExpr Name [Name] Expr
        deriving (Eq, Ord, Show)
-
-data Op
-    = Plus
-    | Minus
-    | Times
-    | Divide
-      deriving (Eq, Ord, Show)

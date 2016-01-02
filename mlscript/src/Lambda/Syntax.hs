@@ -1,6 +1,6 @@
 module Lambda.Syntax where
 
-type Name = String
+import Util (Op, Name)
 
 data Expr
     = Float Double
@@ -11,23 +11,12 @@ data Expr
     | Function [Expr] Expr
     | Switch Expr [SwitchExpr] SwitchDefault
     | Con Int [Expr]
-    | Decon Int Expr
+    | Decon [Name] Expr
     | Extern Name [Expr]
    deriving (Eq, Ord, Show)
-
-data Constructor
-    = Constructor Name Int
-      deriving (Eq, Ord, Show)
 
 type SwitchDefault = Maybe Expr
 
 data SwitchExpr
      = SwitchExpr [Int] Expr
        deriving (Eq, Ord, Show)
-
-data Op
-    = Plus
-    | Minus
-    | Times
-    | Divide
-      deriving (Eq, Ord, Show)
